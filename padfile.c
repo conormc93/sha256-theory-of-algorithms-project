@@ -28,24 +28,33 @@ int main(int argc, char *argv[]){
 
         //reading 64 bytes from the file
         nobytes = fread(M.e, 1, 64, f);
-
+        printf("Read %2llu bytes\n", nobytes);
         nobits = nobits + (nobytes * 8);
 
         if(nobytes < 56){
 
             printf("I've found a block with less than 55 bytes!\n");
+
             M.e[nobytes] = 0x80;
 
             while(nobytes < 56){
-                nobytes++;
+                nobytes = nobytes + 1;
                 M.e[nobytes] = 0x00;
             } // end while
+
             M.s[7] = nobits;
         }// end if
 
     }// end while   
 
     fclose(f);
+
+    for(int i = 0; i < 64; i++)
+        printf("%x", M.e[i]);
+
+    printf("\n");
+
+    
     
     return 0;
 } // end main
