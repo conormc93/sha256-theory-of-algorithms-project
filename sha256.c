@@ -60,7 +60,7 @@ int main(int argc, char *argv[]){
 	FILE *msg;
 	//Storing file path
 	char fnamer[100] = "";
-	printf("\n\nPlease Enter the Full Path of the file you want to view: \n");
+	printf("\n\nEnter the full path of the file you want to hash: \n");
 	scanf("%s",&fnamer);
 	msg = fopen(fnamer,"r");
 
