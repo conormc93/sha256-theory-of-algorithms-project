@@ -7,17 +7,19 @@
 //	SSL, SSH, PGP, and bitcoin all rely on this hash function. 
 
 // The input/output header file
-# include <stdio.h>
+#include <stdio.h>
 // For using fixed bit length integers
-# include <stdint.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <conio.h>
+#include <string.h>
+
 
 // every member variable is stored in the same memory location
 // one varibale accesses 512 bits of memory
 union msgblock {
     uint8_t e[64];  
-    uint32_t t[16]; 
+    uint32_t t[32]; 
     uint64_t s[8];
 };
 
@@ -41,9 +43,42 @@ uint32_t shr(uint32_t x, uint32_t n);
 uint32_t SIG0(uint32_t x);
 uint32_t SIG1(uint32_t x);
 
+
 // see section 4.1.2 for definitions
 uint32_t Ch(uint32_t x, uint32_t y, uint32_t z);
 uint32_t Maj(uint32_t x, uint32_t y, uint32_t z);
+
+
+static const uint32_t K[64] = {
+0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+};
+
+#define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
+#define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
+#define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
+#define MAJ(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+#define EP0(x) (ROTRIGHT(x,2) ^ ROTRIGHT(x,13) ^ ROTRIGHT(x,22))
+#define EP1(x) (ROTRIGHT(x,6) ^ ROTRIGHT(x,11) ^ ROTRIGHT(x,25))
+#define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
+#define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
+
+#define IS_BIG_ENDIAN (!*(unsigned char *)&(uint16_t){1})
+
+// Macro functions for converting from little endian to big endian.
+// http://www.mit.edu/afs.new/sipb/project/merakidev/include/bits/byteswap.h
+#define SWAP_UINT32(x) (((x) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | ((x) << 24))
+#define SWAP_UINT64(x) \
+        ( (((x) >> 56) & 0x00000000000000FF) | (((x) >> 40) & 0x000000000000FF00) | \
+          (((x) >> 24) & 0x0000000000FF0000) | (((x) >>  8) & 0x00000000FF000000) | \
+          (((x) <<  8) & 0x000000FF00000000) | (((x) << 24) & 0x0000FF0000000000) | \
+          (((x) << 40) & 0x00FF000000000000) | (((x) << 56) & 0xFF00000000000000) )
 
 // retrieve the next message block
 // return 1 if there is another message block else return 0
@@ -53,32 +88,35 @@ uint32_t Maj(uint32_t x, uint32_t y, uint32_t z);
 int nextmsgblock(FILE *f, union msgblock *M, enum status *S, uint64_t *nobits);
 
 // declare method
-void sha256(FILE *f);
+uint64_t * sha256(FILE *f);
 
 int main(int argc, char *argv[]){
 
-	FILE *msg;
-	//Storing file path
-	char fnamer[100] = "";
-	printf("\n\nEnter the full path of the file you want to hash: \n");
-	scanf("%s",&fnamer);
-	msg = fopen(fnamer,"r");
+	FILE* msgFile;  
+    int n = 1;
 
-	if(msg == NULL)
-	{
-		printf("\n%s\" File NOT FOUND!",fnamer);
-		getch();
-		exit(1);
-	}
+    uint64_t  *h;
 
-	// Close the file
-  	fclose(msg);
-
-	sha256(msg);
+    //check if a file has been inputted
+    if((msgFile = fopen(argv[1],"r"))!=NULL){
+            
+    //pass the file to sha256
+        h = sha256(msgFile);
+        for(int i =0; i < 8; i++){
+            printf("%08llx", *(h+i));
+        }
+        //printf(*pointer);
+    }
+    else
+    {
+        printf("\nError: File not found \n");
+    }
+    fclose(msgFile);
+    return 0;
 
 } // end main
 
-void sha256(FILE *msg){
+uint64_t * sha256(FILE *msg){
 
 	// Curr message block
 	union msgblock M;
@@ -88,27 +126,6 @@ void sha256(FILE *msg){
 
 	// Status of the message blocks
 	enum status S = READ;
-
-	// the K constants
-	// defined in section 4.2.2
-	uint32_t K[] = {
-		0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
-		0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 
-		0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-		0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 
-		0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-		0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 
-		0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-		0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 
-		0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-		0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 
-		0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
-		0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 
-		0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
-		0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-		0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-		0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-	};
 
 	// message schedule (section 6.2)
 	uint32_t W[64];
@@ -132,6 +149,8 @@ void sha256(FILE *msg){
 		0x5be0cd19,	
 	};
 
+	uint64_t *list = malloc(sizeof(uint64_t[8]));
+
 	// for looping
 	int i, t;
 
@@ -140,25 +159,37 @@ void sha256(FILE *msg){
 
 		// from page 22, W[t] = M[t] for 0 <= t <=15
 		for (t = 0; t < 16; t++){
-			W[t] = M.t[t];
+			//converting from little endian to big endian
+            if(IS_BIG_ENDIAN){
+                W[t] = M.t[t];
+            }
+            else{
+                W[t] = SWAP_UINT32(M.t[t]) ;
+            }
 		}
 
 		// from page 22, W[t] = ...
 		for (t = 16; t < 64; t++){
-			W[t] = sig1(W[t-2]) + W[t-7] + sig0(W[t-15]) + W[t-16];
+			W[t] = SIG1(W[t - 2]) + W[t - 7] + SIG0(W[t - 15]) + W[t - 16];
 		}
 
 		// initialise a,b,c,d...h as per step 2 page 22
-		a = H[0]; b = H[1]; c = H[2]; d = H[3]; e = H[4];
-		f = H[5]; g = H[6]; h = H[7];
+		a = H[0];
+		b = H[1];
+		c = H[2];
+		d = H[3];
+		e = H[4];
+		f = H[5];
+		g = H[6];
+		h = H[7];
 
 		// Step 3.
 		// creating new values for working variables
 		for(t = 0; t < 64; t ++){
 
 			// Do the working variables operations as per NIST.
-			T1 = h + SIG1(e) + Ch(e,f,g) + K[t] + W[t];
-			T2 = SIG0(a) + Maj(a,b,c);
+			T1 = h + EP1(e) + CH(e, f, g) + K[t] + W[t];
+        	T2 = EP0(a) + MAJ(a, b, c);
 			h = g;
 			g = f;
 			f = e;
@@ -186,43 +217,13 @@ void sha256(FILE *msg){
 
 	}
 
-	printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", H[0], H[1], H[2], H[3], H[4], H[5], H[6], H[7]);
-	
+	for(t = 0; t < 8; t++){
+        list[t] = H[t];
+    }
+
+    return list;
 }// end void sha265()
 
-// see sections 3.2 for definitions
-uint32_t rotr(uint32_t x, uint32_t n){
-	return (x >> n) | (x << (32-n));
-}
-
-uint32_t shr(uint32_t x, uint32_t n){
-	return (x >> n);
-}
-
-// see sections 3.2 & 4.1.2 for definitions
-uint32_t sig0(uint32_t x){
-	return (rotr(7,x) ^ rotr(18,x) ^ shr(3,x));
-}
-
-uint32_t sig1(uint32_t x){
-	return (rotr(17,x) ^ rotr(19,x) ^ shr(10,x));
-}
-
-uint32_t SIG0(uint32_t x){
-	return (rotr(2,x) ^ rotr(13,x) ^ rotr(22,x));
-}
-
-uint32_t SIG1(uint32_t x){
-	return (rotr(6,x) ^ rotr(11,x) ^ rotr(25,x));
-}
-
-uint32_t Ch(uint32_t x, uint32_t y, uint32_t z){
-	return ((x & y) ^ ((!x) & z));
-}
-
-uint32_t Maj(uint32_t x, uint32_t y, uint32_t z){
-	return ((x & y) ^ (x & z) ^ (y & z));
-}
 
 int nextmsgblock(FILE *msg, union msgblock *M, enum status *S, uint64_t *nobits){
 
@@ -245,7 +246,7 @@ int nextmsgblock(FILE *msg, union msgblock *M, enum status *S, uint64_t *nobits)
             M->e[i] = 0x00;
         }
         // Set the last 64 bits to the number of bits in the file (should be big endian)
-        M->s[7] = *nobits;
+        M->s[7] = SWAP_UINT64(*nobits);
         // Tell S we are finished
         *S = FINISH;
 
@@ -278,7 +279,7 @@ int nextmsgblock(FILE *msg, union msgblock *M, enum status *S, uint64_t *nobits)
 		// Write in the number of bits of the original message or
 		// Append the file size in bits as an unsigned 64 bit integer
 		// NEED TO DETERMINE WHETHER THIS IS GOING IN AS A BIG ENDIAN INTEGER
-		M->s[7] = *nobits;
+		M->s[7] = SWAP_UINT64(*nobits);
 		*S = FINISH;
 	}// end if
 
