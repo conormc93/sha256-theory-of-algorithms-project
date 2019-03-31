@@ -25,7 +25,7 @@ To compile/run the program you can install a _C_ compiler from the below sites:
 
 # How to Run
 1. Compile - `gcc -o sha256.c sha256`
-2. Execute - `sha256.exe`
+2. Execute - `sha256 abc.txt`
 
 # Checking the result of the hashing algorithm
 Before I ran the solution I went to check for the correct hash of a file before using my own algorithm, thus allowing me to compare and confirm the result. The steps included below are:
