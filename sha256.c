@@ -1,12 +1,18 @@
-// Conor McGrath
-// The secure hash algorithm, 256 bit version
-// https://csrc.nist.ggov/csrc/media/publications/fips/180/4/final/documents/fips180-4-draft-aug2014.pdf
+/*********************************************************************
+* Filename:   sha256.c
+* Author:     Conor McGrath
+* Copyright:
+* Disclaimer: This code is presented "as is" without any guarantees.
+* Details:    Implementation of the SHA-256 hashing algorithm.
+              SHA-256 is one of the three algorithms in the SHA2
+              specification. The others, SHA-384 and SHA-512, are not
+              offered in this implementation.
+              Algorithm specification can be found here:
+               * http://csrc.nist.gov/publications/fips/fips180-2/fips180-2withchangenotice.pdf
+              This implementation uses little endian byte order.*/
 
-// Description
-//	SHA-256 is one of the most common one way security hashes used.
-//	SSL, SSH, PGP, and bitcoin all rely on this hash function. 
 
-// The input/output header file
+/*************************** HEADER FILES ***************************/
 #include <stdio.h>
 // For using fixed bit length integers
 #include <stdint.h>
@@ -14,41 +20,24 @@
 #include <conio.h>
 #include <string.h>
 
+/****************************** MACROS ******************************/
+#define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
+#define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
+#define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
+#define MAJ(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+#define EP0(x) (ROTRIGHT(x,2) ^ ROTRIGHT(x,13) ^ ROTRIGHT(x,22))
+#define EP1(x) (ROTRIGHT(x,6) ^ ROTRIGHT(x,11) ^ ROTRIGHT(x,25))
+#define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
+#define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
+#define IS_BIG_ENDIAN (!*(unsigned char *)&(uint16_t){1})
+#define SWAP_UINT32(x) (((x) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | ((x) << 24))
+#define SWAP_UINT64(x) \
+        ( (((x) >> 56) & 0x00000000000000FF) | (((x) >> 40) & 0x000000000000FF00) | \
+          (((x) >> 24) & 0x0000000000FF0000) | (((x) >>  8) & 0x00000000FF000000) | \
+          (((x) <<  8) & 0x000000FF00000000) | (((x) << 24) & 0x0000FF0000000000) | \
+          (((x) << 40) & 0x00FF000000000000) | (((x) << 56) & 0xFF00000000000000) )
 
-// every member variable is stored in the same memory location
-// one varibale accesses 512 bits of memory
-union msgblock {
-    uint8_t e[64];  
-    uint32_t t[32]; 
-    uint64_t s[8];
-};
-
-// lets us know where we are in padding the message
-enum status {
-	READ,
-	PAD0,
-	PAD1,
-	FINISH
-};
-
-// see sections 4.1.2 for definitions 
-uint32_t sig0(uint32_t x);
-uint32_t sig1(uint32_t x);
-
-// see section 3.2 for definitions
-uint32_t rotr(uint32_t x, uint32_t n);
-uint32_t shr(uint32_t x, uint32_t n);
-
-// see section 4.1.2 for definitions
-uint32_t SIG0(uint32_t x);
-uint32_t SIG1(uint32_t x);
-
-
-// see section 4.1.2 for definitions
-uint32_t Ch(uint32_t x, uint32_t y, uint32_t z);
-uint32_t Maj(uint32_t x, uint32_t y, uint32_t z);
-
-
+/**************************** VARIABLES *****************************/
 static const uint32_t K[64] = {
 0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
 0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -60,62 +49,7 @@ static const uint32_t K[64] = {
 0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
 
-#define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
-#define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
-#define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
-#define MAJ(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define EP0(x) (ROTRIGHT(x,2) ^ ROTRIGHT(x,13) ^ ROTRIGHT(x,22))
-#define EP1(x) (ROTRIGHT(x,6) ^ ROTRIGHT(x,11) ^ ROTRIGHT(x,25))
-#define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
-#define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
-
-#define IS_BIG_ENDIAN (!*(unsigned char *)&(uint16_t){1})
-
-// Macro functions for converting from little endian to big endian.
-// http://www.mit.edu/afs.new/sipb/project/merakidev/include/bits/byteswap.h
-#define SWAP_UINT32(x) (((x) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | ((x) << 24))
-#define SWAP_UINT64(x) \
-        ( (((x) >> 56) & 0x00000000000000FF) | (((x) >> 40) & 0x000000000000FF00) | \
-          (((x) >> 24) & 0x0000000000FF0000) | (((x) >>  8) & 0x00000000FF000000) | \
-          (((x) <<  8) & 0x000000FF00000000) | (((x) << 24) & 0x0000FF0000000000) | \
-          (((x) << 40) & 0x00FF000000000000) | (((x) << 56) & 0xFF00000000000000) )
-
-// retrieve the next message block
-// return 1 if there is another message block else return 0
-// this function will complete based on the status
-// the file and a message block chunk will be read
-// nobits keep rtack of the number of bits read from the file 
-int nextmsgblock(FILE *f, union msgblock *M, enum status *S, uint64_t *nobits);
-
-// declare method
-uint64_t * sha256(FILE *f);
-
-int main(int argc, char *argv[]){
-
-	FILE* msgFile;  
-    int n = 1;
-
-    uint64_t  *h;
-
-    //check if a file has been inputted
-    if((msgFile = fopen(argv[1],"r"))!=NULL){
-            
-    //pass the file to sha256
-        h = sha256(msgFile);
-        for(int i =0; i < 8; i++){
-            printf("%08llx", *(h+i));
-        }
-        //printf(*pointer);
-    }
-    else
-    {
-        printf("\nError: File not found \n");
-    }
-    fclose(msgFile);
-    return 0;
-
-} // end main
-
+/*********************** FUNCTION DEFINITIONS ***********************/
 uint64_t * sha256(FILE *msg){
 
 	// Curr message block
@@ -222,8 +156,9 @@ uint64_t * sha256(FILE *msg){
     }
 
     return list;
-}// end void sha265()
+}
 
+/***********************************************************************************/
 
 int nextmsgblock(FILE *msg, union msgblock *M, enum status *S, uint64_t *nobits){
 
@@ -312,8 +247,61 @@ int nextmsgblock(FILE *msg, union msgblock *M, enum status *S, uint64_t *nobits)
      // If we get this far
 	 // then return 1 so that the function is called again
     return 1;
-} // end main
+}
 
+/*********************************************************************************/
+
+// every member variable is stored in the same memory location
+// one varibale accesses 512 bits of memory
+union msgblock {
+    uint8_t e[64];  
+    uint32_t t[32]; 
+    uint64_t s[8];
+};
+
+// lets us know where we are in padding the message
+enum status {
+	READ,
+	PAD0,
+	PAD1,
+	FINISH
+};
+
+// retrieve the next message block
+// return 1 if there is another message block else return 0
+// this function will complete based on the status
+// the file and a message block chunk will be read
+// nobits keep rtack of the number of bits read from the file 
+int nextmsgblock(FILE *f, union msgblock *M, enum status *S, uint64_t *nobits);
+
+// declare method
+uint64_t * sha256(FILE *f);
+
+int main(int argc, char *argv[]){
+
+	FILE* msgFile;  
+    int n = 1;
+
+    uint64_t  *h;
+
+    //check if a file has been inputted
+    if((msgFile = fopen(argv[1],"r"))!=NULL){
+            
+    //pass the file to sha256
+        h = sha256(msgFile);
+        for(int i =0; i < 8; i++){
+            printf("%08llx", *(h+i));
+        }
+        //printf(*pointer);
+    }
+    else
+    {
+        printf("\nError: File not found \n");
+    }
+    fclose(msgFile);
+    return 0;
+
+} // end main
 
 
 
