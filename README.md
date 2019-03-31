@@ -24,7 +24,7 @@ To compile/run the program you can install a _C_ compiler from the below sites:
 - Solus - `sudo eopkg install -c system.devel`
 
 # How to Run
-1. Compile - `gcc -o SHA256.c SHA256`
+1. Compile - `gcc -o sha256.c sha256`
 2. Execute - `sha256.exe`
 
 # Checking the result of the hashing algorithm
@@ -33,18 +33,31 @@ Before I ran the solution I went to check for the correct hash of a file before 
 1. Open Windows Powershell and type - `Get-FileHash FULL-PATH-NAME-OF-FILE-HERE| Format-List`
     - This produces the correct hash for that using sha256.
 ##### Powershell sha256
-![powershell](https://i.imgur.com/6vjeq5B.png)
+![powershell](https://i.imgur.com/RDq1820.png)
 
 2. Open a normal command prompt in the directory your `sha256.c` is located.
     - Follow the steps above to run my solution.
 ##### My solution for sha256
-![sha256](https://i.imgur.com/djatNpV.png)
+![sha256](https://i.imgur.com/TwqpiCy.png)
 
 # Implementation
 The project was done under the guidance of video lectures uploaded by __Dr. Ian McLoughlin__.
 
 During the implementation of the project, research about the algorthim and it's standards was undertaken to try
 and better understand the intricacies of the algorthim.
+
+# Macros and the final result
+As part of the project, it was mentioned we could do multiple things to improve or tidy up the program.
+It was mentioned we could incorporate `macros` using the `#define` method like below. 
+
+![sha256](https://i.imgur.com/y8B67f4.png)
+
+I provided the features mentioned in the videos, and I was able to generate the correct hash on a `.txt` file also. I was also able to create a macro which converts the bytes - contained within the message block - from big endian to little endian within the algorithm. 
+
+I was also able to check for whether the machine was little endian and if it was then it would convert the message to big endian.
+
+The last thing I used was `malloc` to point to the array of hashes contained in `H[]`. This pointer would return the set of values rather than printing out the results in the main method, thus improving memory management.
+
 
 
 # Videos

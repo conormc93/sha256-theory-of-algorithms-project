@@ -256,7 +256,7 @@ int nextmsgblock(FILE *msg, union msgblock *M, enum status *S, uint64_t *nobits)
         return 1;
     }
     
-    // IF WE HEY DOWN HERE, WE HAVNT FINISHED READING THE FILE (S == READ)
+    // WE HAVNT FINISHED READING THE FILE (S == READ)
     nobytes = fread(M->e, 1, 64, msg);
     
     // Keep track of the number of bites wev read
